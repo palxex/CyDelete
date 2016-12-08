@@ -1,9 +1,12 @@
 //
-//  CyDelete8.xm
-//  CyDelete8
+//  CyDelete.xm
+//  CyDelete
 //
 //  Created by Ryan Burke on 02.01.2014.
 //  Copyright (c) 2014 Ryan Burke. All rights reserved.
+//
+//  Modified by Pal Lockheart on 12.04.2016.
+//  Copyright (c) 2016 Pal Lockheart. All rights reserved.
 //
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -54,13 +57,13 @@ static void initTranslation() {
 
 static bool getCFBool(CFStringRef key, bool defaultValue) {
 	//Sync the latest version of the preferences.
-	bool synced = CFPreferencesAppSynchronize(CFSTR("com.ryanburke.cydelete"));
+	bool synced = CFPreferencesAppSynchronize(CFSTR("org.palxex.cydelete"));
 	//If the sync failed, lets just default to protecting Cydia for safety.
 	if(!synced) return defaultValue;
 	//Create a boolean object to hold the success value from next function.
 	Boolean success;
 	//Get the value of the key from the preferences.
-	bool result = CFPreferencesGetAppBooleanValue(key, CFSTR("com.ryanburke.cydelete"), &success);
+	bool result = CFPreferencesGetAppBooleanValue(key, CFSTR("org.palxex.cydelete"), &success);
 	//If the enabled key existed and we got the value okay.
 	if(success) {
 		//Return the value of the key.
@@ -228,7 +231,7 @@ static BOOL isOfficialUninstallable(SBApplication *application) {
 	- (void)displayError {
 		NSString *body = [NSString stringWithFormat:CDLocalizedString(@"PACKAGE_UNINSTALL_ERROR_BODY"), _package];
 		UIAlertView *delView = [[UIAlertView alloc] initWithTitle:CDLocalizedString(@"PACKAGE_UNINSTALL_ERROR_TITLE") message:body delegate:nil cancelButtonTitle:@"Okay" otherButtonTitles:nil];
-		[delView show];
+		[delView show]; 
 	}
 
 	-(void)displayRespring {
@@ -322,7 +325,7 @@ static BOOL cydelete_allowsUninstall(SBIconView *view) {
 	//If the application is Cydia and user has protected it.
 	bool isCydia = ([bundle isEqualToString:@"com.saurik.Cydia"] && getProtectCydia());
 	//If the application is Cydia and user has protected it.
-	bool isPangu = ([bundle isEqualToString:@"io.pangu.loader"] && getProtectPangu());
+	bool isPangu = ([bundle isEqualToString:@"io.pangu.nvwastone"] && getProtectPangu());
 	//If any of these match then we don't want to allow uninstall.
 	if(isApple || isCydia || isPangu || !getEnabled() || getFreeMemory() < 20 ) {
 		return NO;
@@ -352,10 +355,6 @@ static void uninstallClickedForIcon(SBIcon *self) {
 	}
 }
 
-static id _iconToDelete;
-@interface SBIconController(CyDelete)<UIAlertViewDelegate> 
-@property (weak,nonatomic) SBIcon *iconToDelete;
-@end
 static BOOL _forceCydia;
 @interface SBApplicationIcon(CyDelete) 
 @property (nonatomic) BOOL forceCydia;
@@ -395,45 +394,25 @@ static BOOL _forceCydia;
 				}
 			}
 			if(contains) {
-				UIAlertView *alert = [[UIAlertView alloc] initWithTitle:[NSString stringWithFormat:@"%@ IS uninstalling",[app displayName]]
-				                                                message:@"Please WAIT A SEC"
-				                                               delegate:nil 
-				                                      cancelButtonTitle:@"OK"  
-				                                      otherButtonTitles:nil];
-				[alert show];
+				UIAlertController* alert=[UIAlertController alertControllerWithTitle:[NSString stringWithFormat:@"%@ IS uninstalling",[app displayName]] message:@"Please WAIT A SEC" preferredStyle:UIAlertControllerStyleAlert];  
+				[alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]]; 
+				[self presentViewController: alert animated:YES completion:nil];  
 			}else{
-				self.iconToDelete = icon;
 				appicon.forceCydia = YES;
-				UIAlertView *alert = [[UIAlertView alloc] initWithTitle:[appicon uninstallAlertTitle] 
-				                                                message:[appicon uninstallAlertBody]  
-				                                               delegate:self 
-				                                      cancelButtonTitle:[appicon uninstallAlertConfirmTitle]    //Thanks to official delete dialog...
-				                                      otherButtonTitles:[appicon uninstallAlertCancelTitle],nil];
+				UIAlertController* alert=[UIAlertController alertControllerWithTitle:[appicon uninstallAlertTitle] message:[appicon uninstallAlertBody] preferredStyle:UIAlertControllerStyleAlert];  
+				[alert addAction:[UIAlertAction actionWithTitle:[appicon uninstallAlertCancelTitle] style:UIAlertActionStyleDefault handler:nil]]; 
+				[alert addAction:[UIAlertAction actionWithTitle:[appicon uninstallAlertConfirmTitle] style:UIAlertActionStyleCancel handler:^(UIAlertAction* _Nonnull action)  
+				{
+				    Class $LSApplicationWorkspace = objc_getClass("LSApplicationWorkspace");
+				    [[$LSApplicationWorkspace defaultWorkspace] unregisterApplication:[NSURL fileURLWithPath:[app path]]];
+				    Class $SBApplicationController = objc_getClass("SBApplicationController");
+				    [[$SBApplicationController sharedInstance] uninstallApplication:app];
+				}]];  
 				appicon.forceCydia = NO;
-				alert.delegate = self;
-				alert.tag=23333;
-				[alert show];
+				[self presentViewController: alert animated:YES completion:nil];  
 			}
 		}else{
 			%orig;
-		}
-	}
-	%new
-	- (id)iconToDelete{
-		return _iconToDelete;
-	}
-	%new
-	- (void)setIconToDelete:(id)icon{
-		_iconToDelete = icon;
-	}
-	%new
-	-(void) alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex{
-		if( alertView.tag == 23333 && buttonIndex == 0 ) {
-			SBApplication *app = [self.iconToDelete application];
-			Class $LSApplicationWorkspace = objc_getClass("LSApplicationWorkspace");
-			[[$LSApplicationWorkspace defaultWorkspace] unregisterApplication:[NSURL fileURLWithPath:[app path]]];
-			Class $SBApplicationController = objc_getClass("SBApplicationController");
-			[[$SBApplicationController sharedInstance] uninstallApplication:app];
 		}
 	}
 %end
