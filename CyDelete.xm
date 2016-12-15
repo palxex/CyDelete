@@ -389,7 +389,7 @@ static BOOL _forceCydia;
 		if(pkgName != [NSNull null]) {
 			uninstallClickedForIcon(icon);
 		}
-		if(cydelete_IOSVersionAbove92()) {
+		if(cydelete_IOSVersionAbove92() && [[iconPackagesDict allKeys] containsObject:[app bundleIdentifier]]) {
 			//new mechanism: iOS 9.2 above will not automatically trigger uninstall, we've to call it manually
 			BOOL contains = NO;
 			for(CDUninstallDpkgOperation *operation in [uninstallQueue operations]){
