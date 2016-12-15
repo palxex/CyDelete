@@ -310,8 +310,11 @@ static void removeBundleFromMIList(NSString *bundle) {
 }
 %end
 
-static BOOL cydelete_allowsUninstall(SBIconView *view) {
-	SBIcon *arg = [view icon];
+static BOOL cydelete_IOSVersionAbove92() {
+	return kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_9_2;
+}
+
+static BOOL cydelete_allowsUninstall(SBIcon *arg) {
 	//Get the bundle ID for this application.
 	NSString *bundle = nil;
 	if (kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_8_0) {
@@ -372,7 +375,9 @@ static BOOL _forceCydia;
 		if([arg1 class] != %c(SBIconView) && [arg1 class] != %c(SBActivatorIcon)) {
 			return %orig(arg1);
 		}
-		return cydelete_allowsUninstall(arg1);
+		SBIconView *iconView = arg1;
+		SBIcon *icon = [iconView icon];
+		return cydelete_allowsUninstall(icon);
 	}
 	- (void)iconCloseBoxTapped:(id)_i {
 		%log;
@@ -384,8 +389,8 @@ static BOOL _forceCydia;
 		if(pkgName != [NSNull null]) {
 			uninstallClickedForIcon(icon);
 		}
-		if([[iconPackagesDict allKeys] containsObject:[app bundleIdentifier]]) {
-			NSLog(@"going to notify app:%@",[app bundleIdentifier]);
+		if(cydelete_IOSVersionAbove92()) {
+			//new mechanism: iOS 9.2 above will not automatically trigger uninstall, we've to call it manually
 			BOOL contains = NO;
 			for(CDUninstallDpkgOperation *operation in [uninstallQueue operations]){
 				if([operation.package isEqualToString:[app bundleIdentifier]]){
@@ -426,11 +431,42 @@ static BOOL _forceCydia;
 	- (void)setForceCydia:(BOOL)force{
 		_forceCydia = force;
 	}
+
+	//iOS 7/8/9.0-9.1 compatible code
+	-(BOOL)allowsCloseBox {
+		if([self class] != %c(SBApplicationIcon) && [self class] != %c(SBActivatorIcon)) {
+			return %orig;
+		}
+		return cydelete_allowsUninstall(self);
+	}
+	-(BOOL)allowsUninstall {
+		if([self class] != %c(SBApplicationIcon) && [self class] != %c(SBActivatorIcon)) {
+			return %orig;
+		}
+		return cydelete_allowsUninstall(self);
+	}
+	-(void)closeBoxClicked:(id)event {
+		if([self class] != %c(SBApplicationIcon) && [self class] != %c(SBActivatorIcon)) {
+			%orig;
+			return;
+		}
+		uninstallClickedForIcon(self);
+		%orig;
+	}
+	-(void)uninstallClicked:(id)event {
+		if([self class] != %c(SBApplicationIcon) && [self class] != %c(SBActivatorIcon)) {
+			%orig;
+			return;
+		}
+		uninstallClickedForIcon(self);
+		%orig;
+	}
+
 	-(NSString *)uninstallAlertTitle {
 		%log;
 		if(!_forceCydia && isOfficialUninstallable([self application]))
 			return %orig;
-		return [NSString stringWithFormat:SBLocalizedString(@"UNINSTALL_ICON_TITLE_DELETE_WITH_NAME"),
+		return [NSString stringWithFormat:cydelete_IOSVersionAbove92() ? SBLocalizedString(@"UNINSTALL_ICON_TITLE_DELETE_WITH_NAME") : SBLocalizedString(@"UNINSTALL_ICON_TITLE"),
 						[[self application] displayName]];
 	}
 
@@ -466,14 +502,14 @@ static BOOL _forceCydia;
 		%log;
 		if(!_forceCydia && isOfficialUninstallable([self application]))
 			return %orig;
-		return SBLocalizedString(@"UNINSTALL_ICON_BUTTON_DELETE");
+		return cydelete_IOSVersionAbove92() ? SBLocalizedString(@"UNINSTALL_ICON_BUTTON_DELETE") : SBLocalizedString(@"UNINSTALL_ICON_CONFIRM");
 	}
 
 	-(NSString *)uninstallAlertCancelTitle {
 		%log;
 		if(!_forceCydia && isOfficialUninstallable([self application]))
 			return %orig;
-		return SBLocalizedString(@"UNINSTALL_ICON_BUTTON_CANCEL");
+		return cydelete_IOSVersionAbove92() ? SBLocalizedString(@"UNINSTALL_ICON_BUTTON_CANCEL") : SBLocalizedString(@"UNINSTALL_ICON_CANCEL");
 	}
 %end
 
